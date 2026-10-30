@@ -11,17 +11,15 @@ This repo runs [Playwright](https://playwright.dev/docs/intro) tests on [Browser
 | `playwright.config.js` | Playwright config (tests in `module*/**/*.js`) |
 | `moduleA/`, `moduleB/`, `moduleC/` | Test files |
 
-## Step 1: Create your own repository
+## Step 1: Create your own repository from this template
 
-1. Create a new **private** repository on GitHub (e.g. `my-org/playwright-browserstack`).
-2. Push this code to the `main` branch:
+1. On this repository's GitHub page, click **Use this template → Create a new repository**. Choose your own organization/account and set visibility to **Private**.
+   (If you don't see the button, ask the owner to enable **Settings → General → Template repository**, or download this repo as a ZIP and push it to a new repo you own.)
+2. Open **your new repository**. Everything below (secrets, Actions, schedules) is configured there, not in the template.
+3. Optionally clone it locally:
    ```bash
-   git init
-   git add .
-   git commit -m "Initial commit"
-   git branch -M main
-   git remote add origin https://github.com/<your-org>/<your-repo>.git
-   git push -u origin main
+   git clone https://github.com/<your-org>/<your-repo>.git
+   cd <your-repo>
    ```
 
 ## Step 2: Add BrowserStack credentials as GitHub secrets
