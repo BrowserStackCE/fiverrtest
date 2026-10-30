@@ -1,0 +1,65 @@
+name: BrowserStack Playwright Tests
+
+on:
+  # Run on every push / PR to main
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  # Scheduled runs (cron is always in UTC)
+  schedule:
+    - cron: '0 * * * *'   # Hourly run, at minute 0 of every hour
+    - cron: '0 0 * * *'   # Nightly run, at 00:00 UTC
+  # Manual run from the Actions tab
+  workflow_dispatch:
+    inputs:
+      run_type:
+        description: 'Type of run'
+        required: false
+        default: 'manual'
+        type: choice
+        options: [manual, hourly, nightly]
+
+concurrency:
+  group: browserstack-${{ github.event_name }}-${{ github.event.schedule || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      BROWSERSTACK_USERNAME: ${{ secrets.BROWSERSTACK_USERNAME }}
+      BROWSERSTACK_ACCESS_KEY: ${{ secrets.BROWSERSTACK_ACCESS_KEY }}
+      # Label the build on the BrowserStack dashboard by run type
+      BROWSERSTACK_BUILD_NAME: >-
+        ${{ github.event.schedule == '0 * * * *' && 'hourly-run'
+        || github.event.schedule == '0 0 * * *' && 'nightly-run'
+        || github.event_name == 'workflow_dispatch' && format('{0}-run', inputs.run_type)
+        || 'ci-run' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run Playwright tests on BrowserStack
+        run: npm run sample-test
+
+      - name: Upload local reports (if any)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-artifacts-${{ github.run_id }}
+          path: |
+            playwright-report/
+            test-results/
+            log/
+          if-no-files-found: ignore
