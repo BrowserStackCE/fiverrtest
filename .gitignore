@@ -1,10 +1,4 @@
-node_modules
-playwright-report
-test-results
-log/
-package-lock.json
-local.log
+target/
 .env
-
-# Java multi-session project build output
-java-multisession/target/
+log/
+browserstack.err

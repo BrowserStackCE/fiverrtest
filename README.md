@@ -1,95 +1,68 @@
-# Playwright + BrowserStack: GitHub Actions with Hourly & Nightly Runs
+# Multi-session (peer-to-peer) chat test - BrowserStack Automate + Playwright (Java)
 
-This repo runs [Playwright](https://playwright.dev/docs/intro) tests on [BrowserStack Automate](https://www.browserstack.com/automate) using the `browserstack-node-sdk`. A GitHub Actions workflow runs the tests on every push/PR, **hourly**, **nightly**, and on demand.
+Example of testing an app where **two users interact with each other in real time** (for example a chat),
+using **two separate BrowserStack Automate sessions**, one per user. Each session has its own browser,
+cookies and login, so the test behaves like two real people on two machines.
+
+| Session | User | Started by |
+|---------|------|-----------|
+| 1 | Alice | `BstackRunner` (the BrowserStack SDK session) |
+| 2 | Bob   | `MultiSessionTest` (a second `connect()` to BrowserStack) |
+
+**Chat flow the test walks through**
+1. Alice logs in (session 1) and Bob logs in (session 2).
+2. Alice sends a message, and Bob's session must show it.
+3. Bob replies, and Alice's session must show the reply.
+4. Alice sends a third message, and Bob must see all three in order. Alice's own view is checked at the end.
 
 ## Repository layout
 
 | Path | Purpose |
-|---|---|
-| `.github/workflows/browserstack-tests.yml` | CI workflow (push, PR, schedules, manual) |
-| `browserstack.yml` | BrowserStack config: platforms, parallels, build name, credentials |
-| `playwright.config.js` | Playwright config (tests in `module*/**/*.js`) |
-| `moduleA/`, `moduleB/`, `moduleC/` | Test files |
+|------|---------|
+| `pom.xml` | Maven build; profile `multi-session-test` runs only this test with the BrowserStack SDK |
+| `browserstack.yml` | BrowserStack config: platform (one), BrowserStack Local, build name |
+| `src/test/java/tests/MultiSessionTest.java` | The test: both users, the chat flow, the auth header hook |
+| `src/test/java/pages/ChatPage.java` | Page object: **all locators and the login steps** |
+| `src/test/java/runners/BstackRunner.java` | Starts session 1 on BrowserStack (reads `browserstack.yml`) |
+| `src/test/java/support/LocalTextServer.java` | Demo-only chat backend (delete when you use your own app) |
+| `src/test/resources/site/index.html` | Demo-only chat page served by the demo backend |
+| `src/test/resources/testdata/multisession.properties` | Site URL, user names, chat lines |
+| `.github/workflows/` | Repository workflows (not used by this example) |
 
-## Step 1: Create your own repository from this template
+## Run the demo as-is
+Requires Java 8+ and Maven.
 
-1. On this repository's GitHub page, click **Use this template → Create a new repository**. Choose your own organization/account and set visibility to **Private**.
-   (If you don't see the button, ask the owner to enable **Settings → General → Template repository**, or download this repo as a ZIP and push it to a new repo you own.)
-2. Open **your new repository**. Everything below (secrets, Actions, schedules) is configured there, not in the template.
-3. Optionally clone it locally:
-   ```bash
-   git clone https://github.com/<your-org>/<your-repo>.git
-   cd <your-repo>
+1. Set your BrowserStack credentials (never commit them):
    ```
+   export BROWSERSTACK_USERNAME=<your username>
+   export BROWSERSTACK_ACCESS_KEY=<your access key>
+   ```
+2. Run: `mvn test -P multi-session-test`
+3. Open the build on the BrowserStack Automate dashboard: you will see **two sessions** (one per user).
 
-## Step 2: Add BrowserStack credentials as GitHub secrets
+The demo chat site is a tiny local server started by the test and reached from BrowserStack through
+**BrowserStack Local** (`browserstackLocal: true`, URL `http://bs-local.com:45455/`).
 
-1. Get your **Username** and **Access Key** from [BrowserStack Account Settings](https://www.browserstack.com/accounts/settings).
-2. In GitHub, go to **Settings → Secrets and variables → Actions → New repository secret**.
-3. Add two secrets:
-   - `BROWSERSTACK_USERNAME`
-   - `BROWSERSTACK_ACCESS_KEY`
+## Point it at your own chat app
+Search the code for `CUSTOMER`: every place you change is marked.
 
-Credentials are never stored in the code: `browserstack.yml` reads them from environment variables.
+| What | Where |
+|------|-------|
+| Site URL | `src/test/resources/testdata/multisession.properties` -> `site.url` |
+| Test users + chat lines | same file (`user1.name`, `user2.name`, `chat.msg1..3`) |
+| **Login steps** | `ChatPage.login(...)` in `ChatPage.java` |
+| Locators (input, send button, message list) | `ChatPage.java` (prefer `data-testid`) |
+| **Auth header** | `setUpAuthHeader(...)` in `MultiSessionTest.java`; the token comes from env var `CHAT_AUTH_TOKEN` |
+| Remove the demo server | delete `startLocalSite` / `stopLocalSite` in the test and `support/LocalTextServer.java` |
+| App is publicly reachable | set `browserstackLocal: false` in `browserstack.yml` and remove `browserstack.local` in `buildWsEndpoint` |
+| Different browser/OS for user 2 | `buildWsEndpoint` in `MultiSessionTest.java` |
 
-## Step 3: Enable GitHub Actions
+If you keep the method names in `ChatPage` (`open`, `login`, `sendMessage`, `messages`, `messageAt`),
+`MultiSessionTest` needs no changes.
 
-Open the **Actions** tab. If prompted, click **"I understand my workflows, go ahead and enable them"**.
+Keep secrets (passwords, tokens) in environment variables or CI secrets, not in source.
 
-## Step 4: Run the workflow
-
-### Triggers
-
-| Trigger | When | Build name on BrowserStack |
-|---|---|---|
-| Push / Pull request | On changes to `main` | `ci-run` |
-| Hourly schedule | `0 * * * *` (minute 0 of every hour, UTC) | `hourly-run` |
-| Nightly schedule | `0 0 * * *` (00:00 UTC daily) | `nightly-run` |
-| Manual | **Actions → BrowserStack Playwright Tests → Run workflow** | `manual-run` / `hourly-run` / `nightly-run` (chosen input) |
-
-Build names appear on the [Automate dashboard](https://www.browserstack.com/automate) next to `projectName: BrowserStack Samples`, with an incrementing `#<build number>`. Filter by build name to separate hourly, nightly, and CI results.
-
-### Changing the schedule
-
-Edit the `cron` entries under `on.schedule` in `.github/workflows/browserstack-tests.yml`. Cron times are **UTC**. Examples:
-- Every 30 minutes: `*/30 * * * *`
-- Nightly at 02:30 UTC: `30 2 * * *`
-- Weekdays only, hourly: `0 * * * 1-5`
-
-If you change a cron expression, also update the matching string in the `BROWSERSTACK_BUILD_NAME` expression so the build label stays correct.
-
-> **Notes on scheduled workflows**
-> - Schedules only run from the **default branch** (`main`).
-> - GitHub may delay scheduled runs by several minutes during peak load; they are not guaranteed to start exactly on the hour.
-> - In public repos, schedules are disabled after 60 days of repo inactivity; re-enable them from the Actions tab.
-
-## Step 5: View results
-
-- **GitHub:** Actions tab → select a run → logs and the uploaded `test-artifacts-<run id>` artifact.
-- **BrowserStack:** [Automate dashboard](https://www.browserstack.com/automate) and [Test Observability](https://observability.browserstack.com) (enabled via `testObservability: true`) for videos, logs, and screenshots.
-
-## Customizing
-
-- **Browsers/OS:** edit the `platforms` list in `browserstack.yml` ([full list](https://www.browserstack.com/list-of-browsers-and-platforms/automate)).
-- **Parallelism:** set `parallelsPerPlatform` in `browserstack.yml`. Total parallels = platforms × `parallelsPerPlatform`. Make sure this fits your BrowserStack plan ([calculator](https://www.browserstack.com/automate/parallel-calculator?ref=github)).
-- **Your own tests:** add specs under `moduleA/`, `moduleB/`, `moduleC/` (or change `testMatch` in `playwright.config.js`).
-- **Local/private sites:** set `browserstackLocal: true` in `browserstack.yml` ([docs](https://www.browserstack.com/docs/automate/selenium/local-testing-introduction)).
-
-## Running locally
-
-```bash
-export BROWSERSTACK_USERNAME=<your-username>
-export BROWSERSTACK_ACCESS_KEY=<your-access-key>
-export BROWSERSTACK_BUILD_NAME=local-run
-npm install
-npm run sample-test
-```
-
-## Troubleshooting
-
-| Symptom | Fix |
-|---|---|
-| Authentication failed / 401 | Re-check the two secrets' names and values |
-| Scheduled run not starting | Confirm workflow is on `main` and Actions are enabled |
-| Tests queued on BrowserStack | Reduce `parallelsPerPlatform`/platforms or upgrade parallels |
-| Hourly and nightly overlap at 00:00 | Expected; both run, using separate builds |
+## Notes
+* Run on a **single platform** (as in `browserstack.yml`): the two sessions share one chat, so parallel copies would see each other's messages.
+* The demo page polls every second; your app may use websockets. The assertions already wait up to 10 s for messages to arrive.
+* The `Authorization: Bearer ...` token in the demo is a throwaway value that only protects the local demo server.
