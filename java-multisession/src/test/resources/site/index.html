@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Sample Chat</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 0; padding: 30px; min-height: 100vh; color: #fff;
+           background: linear-gradient(135deg, #1e3c72, #2a5298); }
+    h1 { text-align: center; }
+    input { font-size: 18px; padding: 10px; width: 280px; border-radius: 6px; border: none; }
+    button { font-size: 18px; padding: 10px 22px; margin-left: 8px; border-radius: 6px; border: none;
+             background: #ff9800; cursor: pointer; }
+    #login, #chat { max-width: 640px; margin: 0 auto; }
+    #chat { display: none; }
+    #messages { background: rgba(0,0,0,.25); border-radius: 8px; padding: 12px; height: 260px; overflow-y: auto; margin-bottom: 14px; }
+    .msg { margin: 6px 0; padding: 8px 12px; border-radius: 14px; background: #fff; color: #222; display: inline-block; }
+    .msg .who { font-weight: bold; color: #d81b60; margin-right: 6px; }
+    .row { display: block; }
+    #login-error { color: #ffcdd2; margin-top: 10px; }
+  </style>
+</head>
+<body>
+  <h1>Sample Chat</h1>
+
+  <div id="login">
+    <input type="text" data-testid="username-input" placeholder="Your name" />
+    <button data-testid="login-button">Log in</button>
+    <div id="login-error" data-testid="login-error"></div>
+  </div>
+
+  <div id="chat">
+    <p>Logged in as <b data-testid="current-user"></b></p>
+    <div id="messages" data-testid="message-list"></div>
+    <input type="text" data-testid="message-input" placeholder="Type a message..." />
+    <button data-testid="send-button">Send</button>
+  </div>
+
+  <script>
+    var user = null;
+    var $ = function (id) { return document.querySelector('[data-testid="' + id + '"]'); };
+
+    function render(messages) {
+      var list = $('message-list');
+      list.innerHTML = '';
+      messages.forEach(function (m) {
+        var row = document.createElement('div');
+        row.className = 'row';
+        row.setAttribute('data-testid', 'message');
+        var bubble = document.createElement('span');
+        bubble.className = 'msg';
+        bubble.innerHTML = '<span class="who"></span><span class="text"></span>';
+        bubble.querySelector('.who').textContent = m.user + ':';
+        bubble.querySelector('.text').textContent = m.text;
+        row.appendChild(bubble);
+        list.appendChild(row);
+      });
+      list.scrollTop = list.scrollHeight;
+    }
+
+    function refresh() {
+      fetch('/api/messages').then(function (r) { return r.json(); }).then(render);
+    }
+
+    $('login-button').addEventListener('click', function () {
+      var name = $('username-input').value;
+      fetch('/api/login', { method: 'POST', body: name }).then(function (r) {
+        if (r.ok) {
+          user = name;
+          $('current-user').textContent = name;
+          document.getElementById('login').style.display = 'none';
+          document.getElementById('chat').style.display = 'block';
+          refresh();
+          setInterval(refresh, 1000); // simple polling stands in for a websocket
+        } else {
+          $('login-error').textContent = 'Login failed (' + r.status + ')';
+        }
+      });
+    });
+
+    $('send-button').addEventListener('click', function () {
+      var input = $('message-input');
+      fetch('/api/messages', { method: 'POST', body: JSON.stringify({ user: user, text: input.value }) })
+        .then(function () { input.value = ''; refresh(); });
+    });
+  </script>
+</body>
+</html>

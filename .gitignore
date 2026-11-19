@@ -5,3 +5,6 @@ log/
 package-lock.json
 local.log
 .env
+
+# Java multi-session project build output
+java-multisession/target/

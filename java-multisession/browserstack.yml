@@ -1,0 +1,26 @@
+# Config for the multi-session (peer-to-peer) demo. BstackRunner reads this file from the project root.
+# Run with: mvn test -P multi-session-test
+name: Fiverr Sample
+buildTag: Fiverr
+projectName: BrowserStack Samples
+buildName: multi-session build
+buildIdentifier: ${BUILD_NUMBER}
+framework: junit
+source: java-playwright-browserstack:sample-sdk:v1.0
+
+# One platform only: both sessions share one local website, so the test must not run in parallel copies.
+platforms:
+  - os: Windows
+    osVersion: 11
+    browserName: chrome
+    browserVersion: latest
+parallelsPerPlatform: 1
+
+# Required: the website is hosted on this machine and reached via bs-local.com
+browserstackLocal: true
+
+testObservability: true
+debug: true
+networkLogs: true
+consoleLogs: errors
+
